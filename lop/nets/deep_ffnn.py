@@ -72,4 +72,22 @@ class DeepFFNN(nn.Module):
             activations.append(out)
         out = self.out_layer.forward(x=out)
         return out, activations
+    
+    def forward(self, x):
+        """
+        Forward pass for PyTorch's automatic call.
+        Returns only the final output (same as predict()[0]).
+        """
+        out, _ = self.predict(x)  # Reuse predict's logic
+        return out
+
+    def embed(self, x): # 偷拿qwq
+        activations = []
+        out = self.in_layer.forward(x=x)
+        activations.append(out)
+        for hidden_layer in self.hidden_layers:
+            out = hidden_layer.forward(x=out)
+            activations.append(out)
+        return activations[-1]
+
 
