@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import os
 
 # ===================== 配置 =====================
-CSV_FILE_PATH = "2/0_0.csv"
+CSV_FILE_PATH = "0/0_0.csv"
 SAVE_IMAGE_PATH = "./only_training_iters_plot.png"
 DPI = 300
 

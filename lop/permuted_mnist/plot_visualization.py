@@ -17,7 +17,7 @@ plt.rcParams["figure.dpi"] = 300
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PREPROCESS_DIR = os.path.join(CURRENT_DIR, "preprocessed_data")
 OUTPUT_DIR = os.path.join(CURRENT_DIR, "paper_figures")
-JOINT_DIR = os.path.join(CURRENT_DIR, "2", "joint_results")
+JOINT_DIR = os.path.join(CURRENT_DIR, "0", "joint_results")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 

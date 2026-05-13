@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 
 # 配置主实验目录（和你原有代码一致）
-MAIN_DIR = "2/"
+MAIN_DIR = "0/"
 JOINT_DIR = os.path.join(MAIN_DIR, "joint_results")
 INDEPENDENT_DIR = MAIN_DIR
 
@@ -111,7 +111,7 @@ def load_paradigm_comparison():
     independent_avg_acc = independent_final["recent_accuracy"].mean()
     
     # 3. 联合学习平均准确率（修复路径拼接）
-    JOINT_DIR = os.path.join(os.path.dirname(__file__), "2", "joint_results")
+    JOINT_DIR = os.path.join(os.path.dirname(__file__), "0", "joint_results")
     
     joint_files = [f for f in os.listdir(JOINT_DIR) if re.match(r"joint_model_per_task_accuracy_\d+_tasks\.csv", f)]
     if not joint_files:

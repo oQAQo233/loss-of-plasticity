@@ -35,6 +35,8 @@ class Backprop(object):
         :param target: desired output
         :return: loss
         """
+        x = x.to(self.device)
+        target = target.to(self.device)
         self.opt.zero_grad()
         output, features = self.net.predict(x=x)
         loss = self.loss_func(output, target)

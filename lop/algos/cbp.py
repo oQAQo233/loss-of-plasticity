@@ -64,6 +64,8 @@ class ContinualBackprop(object):
         :param target: desired output
         :return: loss
         """
+        x = x.to(self.gnt.device)
+        target = target.to(self.gnt.device)
         # do a forward pass and get the hidden activations
         output, features = self.net.predict(x=x)
         loss = self.loss_func(output, target)

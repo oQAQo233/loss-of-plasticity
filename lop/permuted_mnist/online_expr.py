@@ -35,7 +35,8 @@ def calculate_dead_neurons(learner, x_task, num_hidden_layers, dev):
     """通用函数：计算当前模型的死亡神经元数量（训练后调用）"""
     learner.net.eval()  # 评估模式，避免BatchNorm等影响
     with torch.no_grad():
-        m = learner.net.predict(x_task[:20000])[1]  # 用前20000样本，和原逻辑一致
+        x_preview = move_to_model_device(learner.net, x_task[:20000])
+        m = learner.net.predict(x_preview)[1]  # 用前20000样本，和原逻辑一致
         dead_neurons_list = []
         for rep_layer_idx in range(num_hidden_layers):
             neuron_activation_sums = m[rep_layer_idx].abs().sum(dim=0)
@@ -208,8 +209,8 @@ def generate_task_samples(x_original, y_original, pixel_perm, data_perm, example
     x_task = x_original[:, pixel_perm].clone()
     x_task, y_task = x_task[data_perm], y_original[data_perm].clone()
     
-    x_task = x_task[:examples_per_task].to(dev)
-    y_task = y_task[:examples_per_task].to(dev)
+    x_task = x_task[:examples_per_task].cpu()
+    y_task = y_task[:examples_per_task].cpu()
     return x_task, y_task
 
 
@@ -219,6 +220,26 @@ def release_tensor_memory(*tensors): # 优化内存小手段
             del tensor
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+
+
+def get_model_device(model):
+    try:
+        return next(model.parameters()).device
+    except StopIteration:
+        return torch.device('cpu')
+
+
+def move_to_model_device(model, *tensors):
+    device = get_model_device(model)
+    moved_tensors = []
+    for tensor in tensors:
+        if tensor is None:
+            moved_tensors.append(None)
+        elif tensor.device == device:
+            moved_tensors.append(tensor)
+        else:
+            moved_tensors.append(tensor.to(device))
+    return moved_tensors if len(moved_tensors) != 1 else moved_tensors[0]
 
 # ====================== 新增：前向测试函数 ======================
 def forward_test(learner, tasks_permutations, x_original, y_original, current_task_idx, save_dir, dev):
@@ -261,6 +282,7 @@ def forward_test(learner, tasks_permutations, x_original, y_original, current_ta
         total_samples = 0
         with torch.no_grad():
             for val_x, val_y in task_dataloader:
+                val_x, val_y = move_to_model_device(learner.net, val_x, val_y)
                 val_output = learner.net(val_x)
                 preds = torch.argmax(val_output, dim=1)
                 total_correct += (preds == val_y).sum().item()
@@ -307,6 +329,7 @@ def test_joint_model_per_task(joint_learner, tasks_permutations, x_original, y_o
         x_task, y_task = generate_task_samples(
             x_original, y_original, pixel_perm, data_perm, examples_per_task, dev
         )
+        x_task, y_task = move_to_model_device(joint_learner.net, x_task, y_task)
         
         with torch.no_grad():
             output = joint_learner.net(x_task)
@@ -342,6 +365,8 @@ def create_model(params, input_size, classes_per_task, num_hidden_layers, num_fe
     else:
         net = DeepFFNN(input_size=input_size, num_features=num_features, 
                       num_outputs=classes_per_task, num_hidden_layers=num_hidden_layers)
+
+    net = net.to(dev)
     
     if params['agent'] in ['bp', 'linear', "l2"]:
         learner = Backprop(
@@ -393,7 +418,8 @@ def train_single_task(learner, x_original, y_original, task_idx, params, save_di
     if params['agent'] != 'linear':
         with torch.no_grad():
             new_idx = int(iter / rank_measure_period)
-            m = learner.net.predict(x_task[:20000])[1]
+            x_preview = move_to_model_device(learner.net, x_task[:20000])
+            m = learner.net.predict(x_preview)[1]
             task_start_approx_ranks = []
             task_start_dead_neurons = []
             for rep_layer_idx in range(num_hidden_layers):
@@ -455,6 +481,7 @@ def train_single_task(learner, x_original, y_original, task_idx, params, save_di
                 total_samples = 0
                 with torch.no_grad():
                     for val_x, val_y in dataloader:
+                        val_x, val_y = move_to_model_device(learner.net, val_x, val_y)
                         val_output = learner.net(val_x)
                         preds = torch.argmax(val_output, dim=1)
                         total_correct += (preds == val_y).sum().item()
@@ -619,6 +646,7 @@ def train_joint_model(params, tasks_permutations, x_original, y_original, save_d
                     total_samples_eval = 0
                     with torch.no_grad():
                         for val_x, val_y in full_dataloader:
+                            val_x, val_y = move_to_model_device(learner.net, val_x, val_y)
                             val_output = learner.net(val_x)
                             preds = torch.argmax(val_output, dim=1)
                             total_correct += (preds == val_y).sum().item()
@@ -657,6 +685,7 @@ def train_joint_model(params, tasks_permutations, x_original, y_original, save_d
     total_samples_eval = 0
     with torch.no_grad():
         for val_x, val_y in full_dataloader:
+            val_x, val_y = move_to_model_device(learner.net, val_x, val_y)
             val_output = learner.net(val_x)
             preds = torch.argmax(val_output, dim=1)
             total_correct += (preds == val_y).sum().item()
@@ -737,7 +766,8 @@ def train_independent_tasks(params, tasks_permutations, x_original, y_original, 
         if params['agent'] != 'linear':
             with torch.no_grad():
                 new_idx = int(iter_count / rank_measure_period)
-                m = current_learner.net.predict(x_task[:20000])[1]
+                x_preview = move_to_model_device(current_learner.net, x_task[:20000])
+                m = current_learner.net.predict(x_preview)[1]
                 for rep_layer_idx in range(num_hidden_layers):
                     ranks[new_idx][rep_layer_idx], effective_ranks[new_idx][rep_layer_idx], \
                     approx_rank_val, approximate_ranks_abs[new_idx][rep_layer_idx] = \
@@ -788,6 +818,7 @@ def train_independent_tasks(params, tasks_permutations, x_original, y_original, 
                     total_samples = 0
                     with torch.no_grad():
                         for val_x, val_y in dataloader:
+                            val_x, val_y = move_to_model_device(current_learner.net, val_x, val_y)
                             val_output = current_learner.net(val_x)
                             preds = torch.argmax(val_output, dim=1)
                             total_correct += (preds == val_y).sum().item()
@@ -873,7 +904,7 @@ def online_expr(params: dict):
     if 'num_examples' in params.keys() and "change_after" in params.keys():
         num_tasks = int(params["num_examples"] / params["change_after"])
     
-    save_dir = '3/'  
+    save_dir = '0/'  
     os.makedirs(save_dir, exist_ok=True)  
     
     # Delete 0.csv file if exists
@@ -894,8 +925,6 @@ def online_expr(params: dict):
     dev = 'cpu'                                 
     if use_gpu == 1:
         dev = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        if dev == torch.device("cuda"):    
-            torch.set_default_tensor_type('torch.cuda.FloatTensor')
     
     to_log = params.get('to_log', False)                              
     num_features = params.get('num_features', 2000)                         
@@ -923,9 +952,6 @@ def online_expr(params: dict):
     
     with open('data/mnist_', 'rb') as f:
         x_original, y_original, _, _ = pickle.load(f)
-        if use_gpu == 1:
-            x_original = x_original.to(dev)
-            y_original = y_original.to(dev)
     
     task_params = []
     tasks_permutations = []  
@@ -1059,7 +1085,7 @@ def main(arguments):
         description=__doc__,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-c', help="Path to the config file for the experiment",
-                        type=str, default='temp_cfg/1.json')
+                        type=str, default='temp_cfg/0.json')
     parser.add_argument('--change_after', type=int, default=None,
                         help="(optional) override change_after from config")
     args = parser.parse_args(arguments)

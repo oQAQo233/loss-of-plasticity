@@ -109,6 +109,7 @@ def register_hook(net, hook_fn):
 
 def nll_accuracy(out, yb):
     predictions = torch.argmax(out, dim=1)
+    yb = yb.to(predictions.device)
     return (predictions == yb).float().mean()
 
 
